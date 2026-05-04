@@ -9,6 +9,7 @@ library(AlphaSimR)
 library(ggplot2)
 library(dplyr)
 library(tidyr)
+library(gridExtra)
 
 # ============================================================
 # Helper palette & theme
@@ -416,7 +417,7 @@ nDrones(colony)    # number of drones")
           ),
           br(),
           div(class = "bee-card",
-            h4("🔬 Queen vs Worker Breeding Values"),
+            h4("🔬 Genetic Correlation: Queen Trait 1 vs Trait 2"),
             plotOutput("bvPlot", height = "260px")
           ),
           br(),
@@ -853,10 +854,13 @@ colony <- buildUp(colony, nWorkers=%d, nDrones=%d)",
         sum(qPheno, na.rm = TRUE) + sum(wPheno, na.rm = TRUE)
       })
 
-      queenBV  <- sapply(colonies, function(col) gv(getQueen(col))[, 1])
+      # Queen GV for both traits (same individual → directly shows corA)
+      queenGV1 <- sapply(colonies, function(col) gv(getQueen(col))[, 1])
+      queenGV2 <- sapply(colonies, function(col) gv(getQueen(col))[, 2])
+      # Mean worker GV for trait 2 (attenuated by polyandry: r ≈ 0.5 / nFathers)
       workerBV <- sapply(colonies, function(col) mean(gv(getWorkers(col))[, 2]))
 
-      list(honey = honey, queenBV = queenBV, workerBV = workerBV,
+      list(honey = honey, queenBV = queenGV1, queenGV2 = queenGV2, workerBV = workerBV,
            nCol = nCol, nW = nW)
     })
   })
@@ -878,18 +882,43 @@ colony <- buildUp(colony, nWorkers=%d, nDrones=%d)",
 
   output$bvPlot <- renderPlot({
     res <- qg_result()
-    df  <- data.frame(Queen_BV = res$queenBV, Worker_BV = res$workerBV,
-                      Honey = res$honey)
-    ggplot(df, aes(x = Queen_BV, y = Worker_BV, color = Honey)) +
-      geom_point(size = 3.5, alpha = 0.8) +
+    corObs  <- round(cor(res$queenBV, res$queenGV2), 2)
+    corWorker <- round(cor(res$queenBV, res$workerBV), 2)
+    df <- data.frame(
+      Queen_GV1  = res$queenBV,
+      Queen_GV2  = res$queenGV2,
+      Worker_GV2 = res$workerBV,
+      Honey      = res$honey
+    )
+    p1 <- ggplot(df, aes(x = Queen_GV1, y = Queen_GV2, color = Honey)) +
+      geom_point(size = 3, alpha = 0.85) +
       scale_color_gradient(low = bee_colors["honey"], high = bee_colors["brown"],
                            name = "Honey yield") +
-      geom_smooth(method = "lm", se = TRUE, color = bee_colors["red"],
-                  linetype = "dashed") +
-      labs(title = "Queen vs Worker Breeding Values",
-           x = "Queen genetic value (trait 1)",
-           y = "Mean worker genetic value (trait 2)") +
-      theme_bee()
+      geom_smooth(method = "lm", se = TRUE, color = bee_colors["red"], linetype = "dashed") +
+      annotate("text", x = -Inf, y = Inf, hjust = -0.1, vjust = 1.4,
+               label = paste0("r = ", corObs, "  (= corA input)"),
+               color = bee_colors["red"], fontface = "bold", size = 3.8) +
+      labs(title = "Queen GV: trait 1 vs trait 2",
+           subtitle = "Direct measure of genetic correlation (corA)",
+           x = "Queen GV — trait 1 (pheromone)",
+           y = "Queen GV — trait 2 (foraging)") +
+      theme_bee() + theme(legend.position = "none")
+
+    p2 <- ggplot(df, aes(x = Queen_GV1, y = Worker_GV2, color = Honey)) +
+      geom_point(size = 3, alpha = 0.85) +
+      scale_color_gradient(low = bee_colors["honey"], high = bee_colors["brown"],
+                           name = "Honey yield") +
+      geom_smooth(method = "lm", se = TRUE, color = bee_colors["blue"], linetype = "dashed") +
+      annotate("text", x = -Inf, y = Inf, hjust = -0.1, vjust = 1.4,
+               label = paste0("r = ", corWorker, "  (attenuated by polyandry)"),
+               color = bee_colors["blue"], fontface = "bold", size = 3.8) +
+      labs(title = "Queen GV (trait 1) vs Mean Worker GV (trait 2)",
+           subtitle = "Attenuated by r = 0.5 and polyandry",
+           x = "Queen GV — trait 1 (pheromone)",
+           y = "Mean worker GV — trait 2 (foraging)") +
+      theme_bee() + theme(legend.position = "right")
+
+    gridExtra::grid.arrange(p1, p2, ncol = 2)
   })
 
   output$qgTable <- renderTable({
@@ -897,10 +926,13 @@ colony <- buildUp(colony, nWorkers=%d, nDrones=%d)",
     data.frame(
       Metric     = c("Mean honey yield", "SD honey yield",
                      "Min", "Max",
-                     "Mean queen GV", "Mean worker GV"),
+                     "Mean queen GV (trait 1)", "Mean queen GV (trait 2)",
+                     "Mean worker GV (trait 2)", "Obs. corr. queen traits"),
       Value      = round(c(mean(res$honey), sd(res$honey),
                            min(res$honey), max(res$honey),
-                           mean(res$queenBV), mean(res$workerBV)), 3)
+                           mean(res$queenBV), mean(res$queenGV2),
+                           mean(res$workerBV),
+                           cor(res$queenBV, res$queenGV2)), 3)
     )
   }, striped = TRUE, bordered = TRUE, hover = TRUE)
 
