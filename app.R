@@ -822,12 +822,14 @@ colony <- buildUp(colony, nWorkers=%d, nDrones=%d)",
       corAv  <- input$corA
       h2v    <- input$h2
 
-      varA   <- c(1, 1 / nW) * h2v / (1 - h2v + h2v)
-      varE   <- c(1, 1 / nW) * (1 - h2v) / (1 - h2v + h2v)
+      # Per-individual variances: h2 = varA / (varA + varE)
+      # Worker trait is per-bee; colony yield = queen_pheno + sum(worker_phenos)
+      varA   <- c(h2v, h2v)
+      varE   <- c(1 - h2v, 1 - h2v)
       corAm  <- matrix(c(1, corAv, corAv, 1), 2, 2)
 
       SP$addTraitA(nQtlPerChr = 100,
-                   mean = c(meanQ, meanW / nW),
+                   mean = c(meanQ, meanW),   # per-individual means, NOT divided by nW
                    var  = varA,
                    corA = corAm)
       SP$setVarE(varE = varE)
@@ -851,8 +853,8 @@ colony <- buildUp(colony, nWorkers=%d, nDrones=%d)",
         sum(qPheno, na.rm = TRUE) + sum(wPheno, na.rm = TRUE)
       })
 
-      queenBV <- sapply(colonies, function(col) bv(getQueen(col))[, 1])
-      workerBV <- sapply(colonies, function(col) mean(bv(getWorkers(col))[, 2]))
+      queenBV  <- sapply(colonies, function(col) gv(getQueen(col))[, 1])
+      workerBV <- sapply(colonies, function(col) mean(gv(getWorkers(col))[, 2]))
 
       list(honey = honey, queenBV = queenBV, workerBV = workerBV,
            nCol = nCol, nW = nW)
@@ -885,8 +887,8 @@ colony <- buildUp(colony, nWorkers=%d, nDrones=%d)",
       geom_smooth(method = "lm", se = TRUE, color = bee_colors["red"],
                   linetype = "dashed") +
       labs(title = "Queen vs Worker Breeding Values",
-           x = "Queen breeding value (trait 1)",
-           y = "Mean worker breeding value (trait 2)") +
+           x = "Queen genetic value (trait 1)",
+           y = "Mean worker genetic value (trait 2)") +
       theme_bee()
   })
 
@@ -895,7 +897,7 @@ colony <- buildUp(colony, nWorkers=%d, nDrones=%d)",
     data.frame(
       Metric     = c("Mean honey yield", "SD honey yield",
                      "Min", "Max",
-                     "Mean queen BV", "Mean worker BV"),
+                     "Mean queen GV", "Mean worker GV"),
       Value      = round(c(mean(res$honey), sd(res$honey),
                            min(res$honey), max(res$honey),
                            mean(res$queenBV), mean(res$workerBV)), 3)
