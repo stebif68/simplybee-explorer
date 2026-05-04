@@ -248,7 +248,7 @@ nDrones(colony)    # number of drones")
             sliderInput("nFounders",  "Number of founder genomes:", 3, 20, 6),
             sliderInput("nChr",       "Number of chromosomes:",     1, 16, 1),
             sliderInput("nSegSites",  "Segregating sites per chr:", 50, 500, 100),
-            sliderInput("nFathers",   "Fathers (drones) queen mates with:", 5, 40, 12),
+            sliderInput("nFathers",   "Fathers (drones) queen mates with:", 1, 40, 12),
             sliderInput("nWorkers_c", "Workers at build-up:",       200, 5000, 1000, step = 100),
             sliderInput("nDrones_c",  "Drones at build-up:",        100, 2000, 500, step = 100),
             actionButton("runSetup", "🚀 Create Colony", class = "btn-run", width = "100%")
@@ -628,25 +628,46 @@ colony <- buildUp(colony, nWorkers=%d, nDrones=%d)",
 
   output$csdBox <- renderUI({
     req(sim_state$colony)
-    pHom <- pHomBrood(sim_state$colony, simParamBee = sim_state$SP)
-    col  <- if (pHom > 0.15) bee_colors["red"] else bee_colors["green"]
-    div(style = sprintf("background:%s; color:white; border-radius:8px; padding:12px; text-align:center; margin:10px 0;", col),
-      tags$b(sprintf("Expected CSD homozygous brood: %.1f%%", pHom * 100)),
+    # Formula: p_hom = 1 / (2 * nFathers)
+    # Assumes many CSD alleles in DCA — good approximation for natural populations
+    # Reference: Tarpy & Page (2002), Seeley & Tarpy (2007)
+    nf   <- nFathers(sim_state$colony)
+    pHom <- 1 / (2 * nf)
+
+    # Thresholds:
+    # pHom > 25%  (< 2 fathers)  : critical, colony likely unproductive
+    # pHom > 6%   (< 8 fathers)  : moderate, measurable brood loss
+    # pHom <= 6%  (>= 8 fathers) : within natural range
+    status <- if (pHom > 0.25) {
+      list(col = bee_colors["red"],
+           msg = "🚨 Critical – severe brood loss, colony likely unproductive")
+    } else if (pHom > 0.06) {
+      list(col = bee_colors["dark_gold"],
+           msg = "⚠️ Moderate – noticeable brood loss, reduced productivity")
+    } else {
+      list(col = bee_colors["green"],
+           msg = "✅ Low – within natural range (wild queens: 12–20 fathers)")
+    }
+
+    div(style = sprintf("background:%s; color:white; border-radius:8px; padding:12px; text-align:center; margin:10px 0;", status$col),
+      tags$b(sprintf("Expected CSD homozygous brood: %.1f%%  (n fathers = %d)", pHom * 100, nf)),
+      br(), br(),
+      status$msg,
       br(),
-      if (pHom > 0.15) "⚠️ High – colony productivity reduced" else "✅ Low – colony is healthy"
+      tags$small("Formula: p_hom = 1 / (2 x n_fathers)  —  Tarpy & Page (2002)")
     )
   })
 
   output$csdPlot <- renderPlot({
     req(sim_state$SP, sim_state$colony)
     # Simulate homozygosity across different numbers of fathers
-    nf_vals <- 2:20
+    nf_vals <- 1:20
     phom     <- sapply(nf_vals, function(nf) {
       # Approximate: p_hom ≈ 1/(2*nFathers) for large allele diversity
       1 / (2 * nf)
     })
     actual_nf   <- nFathers(sim_state$colony)
-    actual_phom <- pHomBrood(sim_state$colony, simParamBee = sim_state$SP)
+    actual_phom <- 1 / (2 * actual_nf)   # formula-based, consistent with csdBox
 
     df <- data.frame(nFathers = nf_vals, pHom = phom)
 
