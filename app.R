@@ -528,7 +528,7 @@ server <- function(input, output, session) {
       )
   }
 
-  colony_counts <- function(col) {
+  colony_counts <- function(col, SP = NULL) {
     if (is.null(col)) {
       return(c(
         Queens = 0L,
@@ -539,33 +539,46 @@ server <- function(input, output, session) {
       ))
     }
 
-    c(
-      Queens       = tryCatch(as.integer(nQueens(col)), error = function(e) 0L),
-      VirginQueens = tryCatch(as.integer(nVirginQueens(col)), error = function(e) 0L),
-      Workers      = tryCatch(as.integer(nWorkers(col)), error = function(e) 0L),
-      Drones       = tryCatch(as.integer(nDrones(col)), error = function(e) 0L),
-      Fathers      = tryCatch(as.integer(nFathers(col)), error = function(e) 0L)
-    )
+    with_global_SP(SP, {
+      c(
+        Queens       = tryCatch(as.integer(nQueens(col)), error = function(e) 0L),
+        VirginQueens = tryCatch(as.integer(nVirginQueens(col)), error = function(e) 0L),
+        Workers      = tryCatch(as.integer(nWorkers(col)), error = function(e) 0L),
+        Drones       = tryCatch(as.integer(nDrones(col)), error = function(e) 0L),
+        Fathers      = tryCatch(as.integer(nFathers(col)), error = function(e) 0L)
+      )
+    })
   }
 
-  queen_state <- function(col) {
+  queen_state <- function(col, SP = NULL) {
     if (is.null(col)) {
       return("No colony")
     }
 
-    nq  <- tryCatch(as.integer(nQueens(col)), error = function(e) 0L)
-    nvq <- tryCatch(as.integer(nVirginQueens(col)), error = function(e) 0L)
-    nf  <- tryCatch(as.integer(nFathers(col)), error = function(e) 0L)
+    with_global_SP(SP, {
+      nq  <- tryCatch(as.integer(nQueens(col)), error = function(e) 0L)
+      nvq <- tryCatch(as.integer(nVirginQueens(col)), error = function(e) 0L)
+      nf  <- tryCatch(as.integer(nFathers(col)), error = function(e) 0L)
 
-    if (nq > 0L && nf > 0L) {
-      "Mated queen"
-    } else if (nq > 0L && nf == 0L) {
-      "Queen present, no stored fathers"
-    } else if (nvq > 0L) {
-      "Virgin queen"
-    } else {
-      "No queen"
+      if (nq > 0L && nf > 0L) {
+        "Mated queen"
+      } else if (nq > 0L && nf == 0L) {
+        "Queen present, no stored fathers"
+      } else if (nvq > 0L) {
+        "Virgin queen"
+      } else {
+        "No queen"
+      }
+    })
+  }
+
+  is_productive_safe <- function(col, SP = NULL) {
+    if (is.null(col)) {
+      return(FALSE)
     }
+    with_global_SP(SP, {
+      tryCatch(isTRUE(isProductive(col)), error = function(e) FALSE)
+    })
   }
 
   founder_summary_df <- function(founderGenomes) {
@@ -1083,7 +1096,7 @@ server <- function(input, output, session) {
   output$setupLog <- renderPrint({
     req(sim_state$colony, sim_state$setup_info)
 
-    cts <- colony_counts(sim_state$colony)
+    cts <- colony_counts(sim_state$colony, sim_state$SP)
     csd <- get_csd_metrics(sim_state$colony, sim_state$SP)
     info <- sim_state$setup_info
 
@@ -1123,8 +1136,8 @@ server <- function(input, output, session) {
     cat(sprintf("  Workers       : %s\n", format(cts["Workers"], big.mark = ",")))
     cat(sprintf("  Drones        : %s\n", format(cts["Drones"], big.mark = ",")))
     cat(sprintf("  Fathers       : %d\n", cts["Fathers"]))
-    cat(sprintf("  Queen state   : %s\n", queen_state(sim_state$colony)))
-    cat(sprintf("  Productive    : %s\n", isProductive(sim_state$colony)))
+    cat(sprintf("  Queen state   : %s\n", queen_state(sim_state$colony, sim_state$SP)))
+    cat(sprintf("  Productive    : %s\n", is_productive_safe(sim_state$colony, sim_state$SP)))
 
     if (isTRUE(csd$available)) {
       cat("\n--- CSD ---\n")
@@ -1141,7 +1154,7 @@ server <- function(input, output, session) {
     }
 
     cat("\n--- Colony object ---\n")
-    print(sim_state$colony)
+    with_global_SP(sim_state$SP, print(sim_state$colony))
   })
 
   output$genomePlot <- renderPlot({
@@ -1262,28 +1275,28 @@ colony <- buildUp(colony, nWorkers = %d, nDrones = %d, exact = TRUE, simParamBee
   # ============================================================
   output$nQueens <- renderText({
     req(sim_state$colony)
-    colony_counts(sim_state$colony)["Queens"]
+    colony_counts(sim_state$colony, sim_state$SP)["Queens"]
   })
 
   output$nWorkersOut <- renderText({
     req(sim_state$colony)
-    format(colony_counts(sim_state$colony)["Workers"], big.mark = ",")
+    format(colony_counts(sim_state$colony, sim_state$SP)["Workers"], big.mark = ",")
   })
 
   output$nDronesOut <- renderText({
     req(sim_state$colony)
-    format(colony_counts(sim_state$colony)["Drones"], big.mark = ",")
+    format(colony_counts(sim_state$colony, sim_state$SP)["Drones"], big.mark = ",")
   })
 
   output$nFathersOut <- renderText({
     req(sim_state$colony)
-    colony_counts(sim_state$colony)["Fathers"]
+    colony_counts(sim_state$colony, sim_state$SP)["Fathers"]
   })
 
   output$castePie <- renderPlot({
     req(sim_state$colony)
 
-    cts <- colony_counts(sim_state$colony)
+    cts <- colony_counts(sim_state$colony, sim_state$SP)
     df <- data.frame(
       Caste = c("Workers", "Drones", "Queen", "Virgin Queens"),
       Count = c(cts["Workers"], cts["Drones"], cts["Queens"], cts["VirginQueens"]),
@@ -1557,8 +1570,8 @@ colony <- buildUp(colony, nWorkers = %d, nDrones = %d, exact = TRUE, simParamBee
     after  <- sim_state$colony
     ev     <- sim_state$event_type
 
-    c_before <- colony_counts(before)
-    c_after  <- colony_counts(after)
+    c_before <- colony_counts(before, sim_state$SP)
+    c_after  <- colony_counts(after, sim_state$SP)
 
     cat(sprintf("Event: %s\n", toupper(ev)))
     if (!is.null(sim_state$event_seed)) {
@@ -1568,26 +1581,26 @@ colony <- buildUp(colony, nWorkers = %d, nDrones = %d, exact = TRUE, simParamBee
     cat("--- BEFORE ---\n")
     cat(sprintf(
       "  Queen state: %s | Workers: %s | Drones: %s | Queens: %d | Virgin queens: %d | Fathers: %d\n",
-      queen_state(before),
+      queen_state(before, sim_state$SP),
       format(c_before["Workers"], big.mark = ","),
       format(c_before["Drones"], big.mark = ","),
       c_before["Queens"],
       c_before["VirginQueens"],
       c_before["Fathers"]
     ))
-    cat(sprintf("  Productive: %s | Collapsed: %s\n", isProductive(before), SIMplyBee::hasCollapsed(before)))
+    cat(sprintf("  Productive: %s | Collapsed: %s\n", is_productive_safe(before, sim_state$SP), SIMplyBee::hasCollapsed(before)))
 
     cat("\n--- AFTER / REMNANT ---\n")
     cat(sprintf(
       "  Queen state: %s | Workers: %s | Drones: %s | Queens: %d | Virgin queens: %d | Fathers: %d\n",
-      queen_state(after),
+      queen_state(after, sim_state$SP),
       format(c_after["Workers"], big.mark = ","),
       format(c_after["Drones"], big.mark = ","),
       c_after["Queens"],
       c_after["VirginQueens"],
       c_after["Fathers"]
     ))
-    cat(sprintf("  Productive: %s | Collapsed: %s\n", isProductive(after), SIMplyBee::hasCollapsed(after)))
+    cat(sprintf("  Productive: %s | Collapsed: %s\n", is_productive_safe(after, sim_state$SP), SIMplyBee::hasCollapsed(after)))
 
     if (ev %in% c("swarm", "supersede") && c_after["VirginQueens"] > 0L && c_after["Fathers"] == 0L) {
       cat("  Note: the remnant now carries a virgin queen and has zero stored fathers until re-mated.\n")
@@ -1599,18 +1612,18 @@ colony <- buildUp(colony, nWorkers = %d, nDrones = %d, exact = TRUE, simParamBee
 
     if (ev == "swarm" && !is.null(sim_state$swarm_out)) {
       sw <- sim_state$swarm_out
-      c_sw <- colony_counts(sw)
+      c_sw <- colony_counts(sw, sim_state$SP)
       cat("\n--- SWARM COLONY ---\n")
       cat(sprintf(
         "  Queen state: %s | Workers: %s | Drones: %s | Queens: %d | Virgin queens: %d | Fathers: %d\n",
-        queen_state(sw),
+        queen_state(sw, sim_state$SP),
         format(c_sw["Workers"], big.mark = ","),
         format(c_sw["Drones"], big.mark = ","),
         c_sw["Queens"],
         c_sw["VirginQueens"],
         c_sw["Fathers"]
       ))
-      cat(sprintf("  Productive: %s | Collapsed: %s\n", isProductive(sw), SIMplyBee::hasCollapsed(sw)))
+      cat(sprintf("  Productive: %s | Collapsed: %s\n", is_productive_safe(sw, sim_state$SP), SIMplyBee::hasCollapsed(sw)))
     }
   })
 
@@ -1639,7 +1652,7 @@ swarm_colony <- result$swarm",
     req(sim_state$before_event, sim_state$colony, sim_state$event_type)
 
     get_counts_df <- function(col, label) {
-      cts <- colony_counts(col)
+      cts <- colony_counts(col, sim_state$SP)
       data.frame(
         Caste = c("Queens", "Virgin Queens", "Workers", "Drones"),
         Count = c(cts["Queens"], cts["VirginQueens"], cts["Workers"], cts["Drones"]),
@@ -1856,24 +1869,10 @@ swarm_colony <- result$swarm",
     cor_q_colony <- round(safe_cor(df$Queen_GV1, df$Colony_GV), 2)
 
     selected_df <- df[res$selected_idx, , drop = FALSE]
-    # selection_summary <- data.frame(
-    #   Group = factor(c("All colonies", "Top 20% by phenotype"), levels = c("All colonies", "Top 20% by phenotype")),
-    #   MeanColonyGV = c(mean(df$Colony_GV), mean(selected_df$Colony_GV)),
-    #   MeanHoney = c(mean(df$Honey), mean(selected_df$Honey))
-    # )
     selection_summary <- data.frame(
-      Group = factor(
-        c("All colonies", "Top 20% by phenotype"),
-        levels = c("All colonies", "Top 20% by phenotype")
-      ),
-      MeanColonyGV = c(
-        mean(df$Colony_GV, na.rm = TRUE),
-        mean(selected_df$Colony_GV, na.rm = TRUE)
-      ),
-      MeanHoney = c(
-        mean(df$Honey, na.rm = TRUE),
-        mean(selected_df$Honey, na.rm = TRUE)
-      )
+      Group = factor(c("All colonies", "Top 20% by phenotype"), levels = c("All colonies", "Top 20% by phenotype")),
+      MeanColonyGV = c(mean(df$Colony_GV), mean(selected_df$Colony_GV)),
+      MeanHoney = c(mean(df$Honey), mean(selected_df$Honey))
     )
     delta_gv <- selection_summary$MeanColonyGV[2] - selection_summary$MeanColonyGV[1]
 
@@ -1929,14 +1928,8 @@ Observed cor(Queen GV1, phenotype) = ", cor_q_honey),
         x = NULL,
         y = "Mean colony GV"
       ) +
-      coord_cartesian(
-        ylim = c(
-          min(0, min(selection_summary$MeanColonyGV, na.rm = TRUE) * 1.05),
-          max(selection_summary$MeanColonyGV, na.rm = TRUE) * 1.22
-        )
-      ) +
-      # scale_y_continuous(limits = c(min(0, min(selection_summary$MeanColonyGV) * 1.05),
-      #                               max(selection_summary$MeanColonyGV) * 1.22)) +
+      scale_y_continuous(limits = c(min(0, min(selection_summary$MeanColonyGV) * 1.05),
+                                    max(selection_summary$MeanColonyGV) * 1.22)) +
       theme_bee()
 
     gridExtra::grid.arrange(
@@ -2119,8 +2112,8 @@ Observed cor(Queen GV1, phenotype) = ", cor_q_honey),
 
     base_df <- data.frame(
       Colony  = paste0("C", seq_len(res$nCol)),
-      Workers = sapply(res$colonies, function(col) colony_counts(col)["Workers"]),
-      Drones  = sapply(res$colonies, function(col) colony_counts(col)["Drones"]),
+      Workers = sapply(res$colonies, function(col) colony_counts(col, sim_state$SP)["Workers"]),
+      Drones  = sapply(res$colonies, function(col) colony_counts(col, sim_state$SP)["Drones"]),
       Swarmed = res$swarmed,
       stringsAsFactors = FALSE
     )
@@ -2171,11 +2164,11 @@ Observed cor(Queen GV1, phenotype) = ", cor_q_honey),
     data.frame(
       Colony                  = paste0("Colony ", seq_len(res$nCol)),
       QueenState              = sapply(res$colonies, queen_state),
-      Workers                 = sapply(res$colonies, function(col) colony_counts(col)["Workers"]),
-      Drones                  = sapply(res$colonies, function(col) colony_counts(col)["Drones"]),
-      Fathers                 = sapply(res$colonies, function(col) colony_counts(col)["Fathers"]),
+      Workers                 = sapply(res$colonies, function(col) colony_counts(col, sim_state$SP)["Workers"]),
+      Drones                  = sapply(res$colonies, function(col) colony_counts(col, sim_state$SP)["Drones"]),
+      Fathers                 = sapply(res$colonies, function(col) colony_counts(col, sim_state$SP)["Fathers"]),
       Expected_CSD_hom_brood  = expected_csd,
-      Productive              = sapply(res$colonies, function(col) if (isProductive(col)) "Yes" else "No"),
+      Productive              = sapply(res$colonies, function(col) if (is_productive_safe(col, res$SP)) "Yes" else "No"),
       Swarmed                 = ifelse(res$swarmed, "Yes", "No"),
       stringsAsFactors        = FALSE
     )
@@ -2185,8 +2178,8 @@ Observed cor(Queen GV1, phenotype) = ", cor_q_honey),
     res <- mc_result()
     req(res)
 
-    total_workers <- sum(sapply(res$colonies, function(col) colony_counts(col)["Workers"]))
-    total_drones  <- sum(sapply(res$colonies, function(col) colony_counts(col)["Drones"]))
+    total_workers <- sum(sapply(res$colonies, function(col) colony_counts(col, sim_state$SP)["Workers"]))
+    total_drones  <- sum(sapply(res$colonies, function(col) colony_counts(col, sim_state$SP)["Drones"]))
     productive_n  <- sum(sapply(res$colonies, isProductive))
 
     cat(sprintf("Apiary with %d colonies created.\n\n", res$nCol))
