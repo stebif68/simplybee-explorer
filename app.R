@@ -1083,65 +1083,67 @@ server <- function(input, output, session) {
   output$setupLog <- renderPrint({
     req(sim_state$colony, sim_state$setup_info)
 
-    cts <- colony_counts(sim_state$colony)
-    csd <- get_csd_metrics(sim_state$colony, sim_state$SP)
-    info <- sim_state$setup_info
+    with_global_SP(sim_state$SP, {
+      cts <- colony_counts(sim_state$colony)
+      csd <- get_csd_metrics(sim_state$colony, sim_state$SP)
+      info <- sim_state$setup_info
 
-    cat("Colony created successfully!\n\n")
-    cat("--- Simulation design ---\n")
-    cat(sprintf("  Base random seed         : %d\n", info$base_seed))
-    cat(sprintf("  Colony Setup seed        : %d\n", info$setup_seed))
-    cat(sprintf("  Founder genomes          : %d\n", info$n_founders))
-    cat(sprintf("  Chromosomes              : %d\n", info$n_chr))
-    cat(sprintf("  Segregating sites/chr    : requested %d | used %d\n",
-                info$requested_seg_sites, info$seg_sites_used))
-    cat(sprintf("  Possible csd alleles     : %d\n", info$n_csd_alleles))
-    cat(sprintf("  csd chromosome           : %d\n", info$csd_chr))
-    cat(sprintf("  DCA donor queens         : %d\n", info$n_dca_donors))
-    cat(sprintf("  DCA drones per donor     : %d\n", info$drones_per_donor))
-    cat(sprintf("  Total DCA drones created : %s\n", format(info$total_dca_drones, big.mark = ",")))
-    cat(sprintf("  Fathers sampled at mating: %d\n", info$n_fathers))
-    cat(sprintf("  Mating design            : %s\n", info$mating_label))
-    cat(sprintf("  Build-up target          : %s workers, %s resident drones\n",
-                format(info$n_workers, big.mark = ","),
-                format(info$n_drones, big.mark = ",")))
-    if (isTRUE(info$seg_sites_adjusted)) {
-      cat("  Note                     : segSites per chromosome was increased automatically so the requested number of csd alleles could be represented at the csd locus.\n")
-    }
-    if (!is.na(info$source_workers) && !is.na(info$source_drones)) {
-      cat(sprintf("  Source colony build-up   : %s workers, %s resident drones\n",
-                  format(info$source_workers, big.mark = ","),
-                  format(info$source_drones, big.mark = ",")))
-    }
-    if (!is.null(info$mating_note) && nzchar(info$mating_note)) {
-      cat(sprintf("  Teaching note            : %s\n", info$mating_note))
-    }
+      cat("Colony created successfully!\n\n")
+      cat("--- Simulation design ---\n")
+      cat(sprintf("  Base random seed         : %d\n", info$base_seed))
+      cat(sprintf("  Colony Setup seed        : %d\n", info$setup_seed))
+      cat(sprintf("  Founder genomes          : %d\n", info$n_founders))
+      cat(sprintf("  Chromosomes              : %d\n", info$n_chr))
+      cat(sprintf("  Segregating sites/chr    : requested %d | used %d\n",
+                  info$requested_seg_sites, info$seg_sites_used))
+      cat(sprintf("  Possible csd alleles     : %d\n", info$n_csd_alleles))
+      cat(sprintf("  csd chromosome           : %d\n", info$csd_chr))
+      cat(sprintf("  DCA donor queens         : %d\n", info$n_dca_donors))
+      cat(sprintf("  DCA drones per donor     : %d\n", info$drones_per_donor))
+      cat(sprintf("  Total DCA drones created : %s\n", format(info$total_dca_drones, big.mark = ",")))
+      cat(sprintf("  Fathers sampled at mating: %d\n", info$n_fathers))
+      cat(sprintf("  Mating design            : %s\n", info$mating_label))
+      cat(sprintf("  Build-up target          : %s workers, %s resident drones\n",
+                  format(info$n_workers, big.mark = ","),
+                  format(info$n_drones, big.mark = ",")))
+      if (isTRUE(info$seg_sites_adjusted)) {
+        cat("  Note                     : segSites per chromosome was increased automatically so the requested number of csd alleles could be represented at the csd locus.\n")
+      }
+      if (!is.na(info$source_workers) && !is.na(info$source_drones)) {
+        cat(sprintf("  Source colony build-up   : %s workers, %s resident drones\n",
+                    format(info$source_workers, big.mark = ","),
+                    format(info$source_drones, big.mark = ",")))
+      }
+      if (!is.null(info$mating_note) && nzchar(info$mating_note)) {
+        cat(sprintf("  Teaching note            : %s\n", info$mating_note))
+      }
 
-    cat("\n--- Colony counts ---\n")
-    cat(sprintf("  Queens        : %d\n", cts["Queens"]))
-    cat(sprintf("  Virgin queens : %d\n", cts["VirginQueens"]))
-    cat(sprintf("  Workers       : %s\n", format(cts["Workers"], big.mark = ",")))
-    cat(sprintf("  Drones        : %s\n", format(cts["Drones"], big.mark = ",")))
-    cat(sprintf("  Fathers       : %d\n", cts["Fathers"]))
-    cat(sprintf("  Queen state   : %s\n", queen_state(sim_state$colony)))
-    cat(sprintf("  Productive    : %s\n", isProductive(sim_state$colony)))
+      cat("\n--- Colony counts ---\n")
+      cat(sprintf("  Queens        : %d\n", cts["Queens"]))
+      cat(sprintf("  Virgin queens : %d\n", cts["VirginQueens"]))
+      cat(sprintf("  Workers       : %s\n", format(cts["Workers"], big.mark = ",")))
+      cat(sprintf("  Drones        : %s\n", format(cts["Drones"], big.mark = ",")))
+      cat(sprintf("  Fathers       : %d\n", cts["Fathers"]))
+      cat(sprintf("  Queen state   : %s\n", queen_state(sim_state$colony)))
+      cat(sprintf("  Productive    : %s\n", isProductive(sim_state$colony)))
 
-    if (isTRUE(csd$available)) {
-      cat("\n--- CSD ---\n")
-      cat(sprintf("  Queen csd haplotypes      : %s\n", paste(csd$queen_labels, collapse = " | ")))
-      cat(sprintf("  Father csd haplotypes     : %s\n", paste(csd$father_labels, collapse = " | ")))
-      cat(sprintf("  Matching father(s)        : %s\n",
-                  if (length(csd$matched_father_idx) >= 1L) paste(csd$matched_father_idx, collapse = ", ") else "none"))
-      cat(sprintf("  Matching haplotype(s)     : %s\n",
-                  if (length(csd$matching_haplotypes) >= 1L) paste(csd$matching_haplotypes, collapse = ", ") else "none"))
-      cat(sprintf("  Exact haplotype rule      : %s = %.2f%%\n", csd$formula_label, 100 * csd$p_hom_from_alleles))
-      cat(sprintf("  Expected homozygous brood : %.2f%%\n", 100 * csd$p_hom))
-      cat(sprintf("  Realised homozygous brood : %s\n", csd$n_hom_label))
-      cat(sprintf("  Interpretation            : %s\n", csd$interpretation))
-    }
+      if (isTRUE(csd$available)) {
+        cat("\n--- CSD ---\n")
+        cat(sprintf("  Queen csd haplotypes      : %s\n", paste(csd$queen_labels, collapse = " | ")))
+        cat(sprintf("  Father csd haplotypes     : %s\n", paste(csd$father_labels, collapse = " | ")))
+        cat(sprintf("  Matching father(s)        : %s\n",
+                    if (length(csd$matched_father_idx) >= 1L) paste(csd$matched_father_idx, collapse = ", ") else "none"))
+        cat(sprintf("  Matching haplotype(s)     : %s\n",
+                    if (length(csd$matching_haplotypes) >= 1L) paste(csd$matching_haplotypes, collapse = ", ") else "none"))
+        cat(sprintf("  Exact haplotype rule      : %s = %.2f%%\n", csd$formula_label, 100 * csd$p_hom_from_alleles))
+        cat(sprintf("  Expected homozygous brood : %.2f%%\n", 100 * csd$p_hom))
+        cat(sprintf("  Realised homozygous brood : %s\n", csd$n_hom_label))
+        cat(sprintf("  Interpretation            : %s\n", csd$interpretation))
+      }
 
-    cat("\n--- Colony object ---\n")
-    print(sim_state$colony)
+      cat("\n--- Colony object ---\n")
+      print(sim_state$colony)
+    })
   })
 
   output$genomePlot <- renderPlot({
