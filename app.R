@@ -170,7 +170,7 @@ ui <- fluidPage(
             style = "color: white; text-decoration: underline; font-weight: 600;"
           )),
         p(tags$b("The Shiny app was developed by S. Biffani"),
-          " (IBBA-CNR & Dipartimento di Scienze Medico-Veterinarie, UNIPR) & P. Cozzi (IBBA-CNR)")
+          " (IBBA-CNR & Dipartimento di Scienze Medico-Veterinarie, UNIPR) &", tags$b("P. Cozzi"), " (IBBA-CNR)")
       ),
       fluidRow(
         column(4,
