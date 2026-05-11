@@ -161,8 +161,16 @@ ui <- fluidPage(
           tags$strong("SIMplyBee"), "R package — a stochastic simulator of",
           "honeybee populations and breeding programmes, built on top of",
           tags$strong("AlphaSimR"), "."),
-        p(tags$b("S. Biffani"),
-          " — IBBA-CNR & Dipartimento di Scienze Medico-Veterinarie, UNIPR")
+        p(
+          tags$b("Reference paper: "),
+          tags$a(
+            "Read the SIMplyBee paper by Obšteter J., Strachan. L. K., Bubnič J., Prešern J., Gorjanc G.",
+            href = "https://doi.org/10.1186/s12711-023-00798-y",
+            target = "_blank",
+            style = "color: white; text-decoration: underline; font-weight: 600;"
+          )),
+        p(tags$b("The Shiny app was developed by S. Biffani"),
+          " (IBBA-CNR & Dipartimento di Scienze Medico-Veterinarie, UNIPR) &", tags$b("P. Cozzi"), " (IBBA-CNR)")
       ),
       fluidRow(
         column(4,
